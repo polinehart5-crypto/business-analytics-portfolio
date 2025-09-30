@@ -1,0 +1,89 @@
+# Import necessary libraries
+
+import pandas as pd
+import matplotlib.pyplot as plt
+import seaborn as sns
+from wordcloud import WordCloud, STOPWORDS
+import re
+
+# Load the original dataset
+df = pd.read_csv('British_Airway_Review.csv')
+
+# Clean the 'date' column and convert to datetime
+def clean_date(date_str):
+    date_str = re.sub(r'(\d+)(st|nd|rd|th)', r'\1', date_str)
+    try:
+        return pd.to_datetime(date_str, format='%d %B %Y')
+    except:
+        return pd.NaT
+
+df['cleaned_review_date'] = df['date'].apply(clean_date)
+
+# --- EDA 1: Average Rating Per Year ---
+df['year'] = df['cleaned_review_date'].dt.year
+yearly_avg = df.groupby('year')['stars'].mean().reset_index()
+
+plt.figure(figsize=(10, 6))
+sns.lineplot(data=yearly_avg, x='year', y='stars', marker='o')
+plt.title('Average Customer Rating per Year (1–10 Scale)')
+plt.xlabel('Year')
+plt.ylabel('Average Rating')
+plt.grid(True)
+plt.tight_layout()
+plt.show()
+
+# --- EDA 2: Average Rating by Seat Type ---
+seat_avg = df.groupby('seat_type')['stars'].mean().sort_values()
+
+plt.figure(figsize=(8, 5))
+seat_avg.plot(kind='barh', color='skyblue')
+plt.title('Average Rating by Seat Type')
+plt.xlabel('Average Rating')
+plt.ylabel('Seat Type')
+plt.tight_layout()
+plt.show()
+
+# --- EDA 3: Ratings by Most Frequent Routes ---
+top_routes = df['route'].value_counts().head(10).index
+route_avg = df[df['route'].isin(top_routes)].groupby('route')['stars'].mean().sort_values()
+
+plt.figure(figsize=(10, 6))
+route_avg.plot(kind='bar', color='orange')
+plt.title('Average Rating for Top 10 Most Frequent Routes')
+plt.ylabel('Average Rating')
+plt.xticks(rotation=45, ha='right')
+plt.tight_layout()
+plt.show()
+
+# --- EDA 4: Word Cloud of Positive and Negative Reviews ---
+positive_text = " ".join(df[df['stars'] >= 8]['reviews'].dropna())
+negative_text = " ".join(df[df['stars'] <= 4]['reviews'].dropna())
+
+# Positive Reviews
+wordcloud_pos = WordCloud(stopwords=STOPWORDS, background_color='white', width=800, height=400).generate(positive_text)
+plt.figure(figsize=(10, 5))
+plt.imshow(wordcloud_pos, interpolation='bilinear')
+plt.axis('off')
+plt.title('Word Cloud - Positive Reviews')
+plt.tight_layout()
+plt.show()
+
+# Negative Reviews
+wordcloud_neg = WordCloud(stopwords=STOPWORDS, background_color='black', colormap='Reds', width=800, height=400).generate(negative_text)
+plt.figure(figsize=(10, 5))
+plt.imshow(wordcloud_neg, interpolation='bilinear')
+plt.axis('off')
+plt.title('Word Cloud - Negative Reviews')
+plt.tight_layout()
+plt.show()
+
+# --- EDA 5: Distribution of Ratings ---
+plt.figure(figsize=(8, 5))
+sns.histplot(df['stars'], bins=10, kde=True, color='teal')
+plt.title('Distribution of Customer Ratings')
+plt.xlabel('Rating (1–10)')
+plt.ylabel('Count')
+plt.axvline(df['stars'].mean(), color='red', linestyle='--', label='Mean')
+plt.legend()
+plt.tight_layout()
+plt.show()
