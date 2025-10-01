@@ -1,0 +1,152 @@
+# # Question: 
+# given the dataset, do the following exercises using R coding: 
+# 1) analyze trends in prices and volumes over time using summary statistics. produce a line chart for the close price and traded volume. 
+# 2) calculate the daily returns of Bitcoin using the close prices; plot a histogram and box-plot for the return series. 
+# 3) test the hypothesis that Bitcoin daily return is zero / 5% /10%. Use a double sided test for zero. use a one-sided test for 5% and 10% (the rejection region is on the right tail).
+# 4) Test for variance of daily return is greater than 10%. 
+# 5) Build a regression model to predict the log value of the trading volume based on the absolute value of returns. test for the significance of the slope coefficient. 
+
+
+
+
+# Load necessary libraries
+library(ggplot2)
+library(readr)
+library(dplyr)
+# Load the dataset
+bitcoin_data <- read.csv("coin_Bitcoin.csv")
+
+bitcoin_data <- subset(bitcoin_data, !is.na(Volume) & Volume > 0) # remove rows with missing values
+
+# Convert Date to Date format and sort data by Date
+bitcoin_data$Date <- as.Date(bitcoin_data$Date, format = "%Y-%m-%d")
+bitcoin_data <- bitcoin_data[order(bitcoin_data$Date), ]
+
+# Task 1: summary statistics. Line chart. 
+
+# Summary for Closing Price
+cat("Summary Statistics for Closing Price:\n")
+print(summary(bitcoin_data$Close))
+cat("Standard Deviation:", sd(bitcoin_data$Close), "\n\n")
+
+# Summary for Volume
+cat("Summary Statistics for Trading Volume:\n")
+print(summary(bitcoin_data$Volume))
+cat("Standard Deviation:", sd(bitcoin_data$Volume), "\n\n")
+
+# Line Chart: Closing Price Over Time 
+ggplot(bitcoin_data, aes(x = Date, y = Close)) +
+  geom_line(color = "blue") +
+  labs(title = "Bitcoin Closing Price Over Time",
+       x = "Date", y = "Closing Price (USD)") +
+  theme_minimal()
+
+# Line Chart: Trading Volume Over Time 
+ggplot(bitcoin_data, aes(x = Date, y = Volume)) +
+  geom_line(color = "darkgreen") +
+  labs(title = "Bitcoin Trading Volume Over Time",
+       x = "Date", y = "Volume") +
+  theme_minimal()
+
+
+
+
+# Task 2: Calculate daily returns. plot histogram and boxplot
+
+# Sort data by date
+bitcoin_data <- bitcoin_data %>%
+  arrange(Date) %>%
+  mutate(log_return = log(Close / lag(Close)))
+
+# Remove rows with missing values
+bitcoin_returns <- na.omit(bitcoin_data)
+
+head(bitcoin_returns[, c("Date", "Close", "log_return")])
+
+# Histogram of Bitcoin Daily Log Returns
+ggplot(bitcoin_returns, aes(x = log_return)) +
+  geom_histogram(binwidth = 0.02, fill = "blue", color = "black", alpha = 0.5) +
+  labs(title = "Histogram of Bitcoin Daily Log Returns",
+       x = "Daily Log Returns",
+       y = "Frequency") +
+  theme_minimal()
+
+# Box plot for Bitcoin Daily Log Returns
+ggplot(bitcoin_returns, aes(y = log_return)) +
+  geom_boxplot(fill = "skyblue", color = "black") +
+  labs(title = "Box Plot of Bitcoin Daily Log Returns ",
+       y = " Daily Returns") +
+  theme_minimal()
+
+# Task 3: Hypothesis testing for daily returns
+
+# Hypothesis Test: mean = 0 (two-tailed)
+
+t.test(bitcoin_returns$log_return, mu = 0, alternative = "two.sided", conf.level = 0.95)
+
+# Hypothesis Test: mean > 5% (right-tailed)
+
+t.test(bitcoin_returns$log_return, mu = 0.05, alternative = "greater")
+
+# Hypothesis Test: mean > 10% (right-tailed)
+
+t.test(bitcoin_returns$log_return, mu = 0.10, alternative = "greater")
+
+# Task 4: Hypothesis testing for variance of returns
+
+# Calculate the variance of daily returns
+daily_variance <- var(bitcoin_returns$log_return)
+
+# Hypothesis Test: variance (Chi-squared test)
+# Null Hypothesis: variance <= 0.10
+# Alternative Hypothesis: variance > 0.10
+
+n <- length(bitcoin_returns$log_return) # number of observations
+
+# Chi-squared statistic
+chi_squared_stat <- (n - 1) * daily_variance / 0.10  
+df <- n - 1 # degrees of freedom
+p_value <- 1 - pchisq(chi_squared_stat, df) # p-value from the Chi-squared distribution
+
+# Output the results
+cat("Calculated Variance of Daily Returns:", daily_variance, "\n")
+cat("Chi-squared Statistic:", chi_squared_stat, "\n")
+cat("Degrees of Freedom:", df, "\n")
+cat("p-value:", p_value, "\n")
+
+# Conclusion based on the p-value
+if (p_value <= 0.05) {
+  cat("Reject the null hypothesis: The variance of daily returns is significantly greater than 10% (p-value =", p_value, ")\n")
+} else {
+  cat("Fail to reject the null hypothesis: The variance of daily returns is not significantly greater than 10% (p-value =", p_value, ")\n")
+}
+
+# Task 5: Regression analysis
+
+
+# 1. Calculate the absolute value of daily returns
+bitcoin_returns$abs_return <- abs(bitcoin_returns$log_return)
+
+# 2. Transform the trading volume into Log
+bitcoin_returns$log_volume <- log(bitcoin_returns$Volume)
+
+# 3. Create a scatter plot 
+ggplot(bitcoin_returns, aes(x = abs_return, y = log_volume)) +
+  geom_point(color = "blue") +
+  labs(title = "Scatter plot of Absolute Daily Return vs Log Volume",
+       x = "Absolute Daily Return", y = "Log Trading Volume") +
+  theme_minimal()
+
+# 4. Produce the linear regression model
+model <- lm(log_volume ~ abs_return, data = bitcoin_returns)
+
+# 5. Display detailed regression results
+summary(model)
+
+# 6. Calculate the 95% confidence interval for the slope coefficient
+confint(model, level = 0.95)
+
+# 7. Predict log volume for a new absolute return value (e.g., abs_return = 0.05)
+new_data <- data.frame(abs_return = 0.05)  # Example: New value for absolute return
+predicted_log_volume <- predict(model, newdata = new_data)
+predicted_log_volume
