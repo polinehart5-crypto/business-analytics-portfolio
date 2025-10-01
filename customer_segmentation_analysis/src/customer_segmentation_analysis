@@ -1,0 +1,153 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+Created on Fri Apr 11 00:23:32 2025
+
+@author: polinaharoutounian
+"""
+
+import pandas as pd
+import matplotlib.pyplot as plt
+import seaborn as sns
+from sklearn.preprocessing import StandardScaler, LabelEncoder
+from sklearn.cluster import KMeans
+import numpy as np
+import random
+
+# Set random seed for reproducibility
+random.seed(42)
+np.random.seed(42)
+
+# Load the dataset
+data = pd.read_csv('/Users/polinaharoutounian/Downloads/bank.csv')
+
+# Clean the data (drop rows with missing values)
+data = data.dropna()
+
+# Boxplot for numerical features to detect outliers
+plt.figure(figsize=(10, 6))
+sns.boxplot(x=data['balance'])
+plt.title('Boxplot of Account Balance')
+plt.show()
+
+plt.figure(figsize=(10, 6))
+sns.boxplot(x=data['age'])
+plt.title('Boxplot of Age')
+plt.show()
+
+# Calculate the IQR for 'balance' and 'age' columns
+Q1_balance = data['balance'].quantile(0.25)
+Q3_balance = data['balance'].quantile(0.75)
+IQR_balance = Q3_balance - Q1_balance
+
+Q1_age = data['age'].quantile(0.25)
+Q3_age = data['age'].quantile(0.75)
+IQR_age = Q3_age - Q1_age
+
+# Define the lower and upper bounds for each column
+lower_bound_balance = Q1_balance - 1.5 * IQR_balance
+upper_bound_balance = Q3_balance + 1.5 * IQR_balance
+lower_bound_age = Q1_age - 1.5 * IQR_age
+upper_bound_age = Q3_age + 1.5 * IQR_age
+
+print(f"Upper bound of age: {upper_bound_age}")
+print(f"Upper bound of balance: {upper_bound_balance}")
+
+# Remove outliers from both 'balance' and 'age'
+data_cleaned = data[(data['balance'] >= lower_bound_balance) & (data['balance'] <= upper_bound_balance) &
+                    (data['age'] >= lower_bound_age) & (data['age'] <= upper_bound_age)]
+
+# Only select 'age' and 'balance' columns for clustering
+data_subset = data_cleaned[['age', 'balance']]
+
+# Apply scaling to the data (important for K-Means)
+scaler = StandardScaler()
+scaled_data = scaler.fit_transform(data_subset)
+
+# Apply K-Means clustering (e.g., with 3 clusters)
+kmeans = KMeans(n_clusters=3, random_state=42, n_init=20)
+kmeans.fit(scaled_data)
+
+# Add the cluster labels to the data
+data_subset['Cluster'] = kmeans.labels_
+
+# Visualize the clusters
+plt.figure(figsize=(10, 6))
+sns.scatterplot(x='age', y='balance', hue='Cluster', data=data_subset, palette='viridis', s=100)
+plt.title('K-Means Clusters: Age vs Balance')
+plt.show()
+
+# Add the cluster labels to the cleaned data
+data_cleaned['Cluster'] = kmeans.labels_
+
+# Bar plot for the 'marital' variable by cluster
+plt.figure(figsize=(10, 6))
+sns.countplot(x='Cluster', hue='marital', data=data_cleaned)
+plt.title('Marital Status by Cluster')
+plt.show()
+
+# Bar plot for the 'job' variable by cluster
+plt.figure(figsize=(10, 6))
+sns.countplot(x='Cluster', hue='job', data=data_cleaned)
+plt.title('Job Type by Cluster')
+plt.show()
+
+
+from mlxtend.frequent_patterns import apriori, association_rules
+
+
+
+# Apply one-hot encoding for categorical variables 
+data_encoded = pd.get_dummies(data_cleaned)
+
+# Binarize the 'balance' column into two categories: "above median" and "below median"
+data_cleaned['balance'] = (data_cleaned['balance'] > data_cleaned['balance'].median()).astype(int)
+data_encoded['age'] = (data_cleaned['age'] > data_cleaned['age'].median()).astype(int)
+
+# Check if there are any values that are not 0 or 1
+print(data_encoded.describe())
+
+# Ensure no column has values other than 0 or 1
+data_encoded = data_encoded.applymap(lambda x: 1 if x > 0 else 0)
+
+# Apply the Apriori algorithm to find frequent itemsets
+# Set the min_support threshold 
+frequent_itemsets = apriori(data_encoded, min_support=0.05, use_colnames=True)
+
+# Generate association rules from the frequent itemsets
+rules = association_rules(frequent_itemsets, metric="lift", min_threshold=1.0)
+
+# Display the rules
+print(rules)
+
+# Optional: Visualizing the top rules (sorted by lift)
+rules_sorted = rules.sort_values(by='lift', ascending=False)
+print(rules_sorted.head())
+
+# Optional: Visualizing support vs. confidence vs. lift of the rules
+import matplotlib.pyplot as plt
+import seaborn as sns
+
+plt.figure(figsize=(10, 6))
+sns.scatterplot(x='support', y='confidence', size='lift', data=rules_sorted, hue='lift', palette='viridis', sizes=(20, 200))
+plt.title('Association Rules: Support vs Confidence vs Lift')
+plt.show()
+
+top_n = 10  # Adjust this to the number of top rules you want to display
+
+# Filter top N rules
+top_rules = rules_sorted.head(top_n)
+
+# Extract readable antecedent-consequent pairs
+top_rules['antecedent_str'] = top_rules['antecedents'].apply(lambda x: ', '.join(list(x)))
+top_rules['consequent_str'] = top_rules['consequents'].apply(lambda x: ', '.join(list(x)))
+
+# Create a bar plot for top N rules sorted by lift
+plt.figure(figsize=(10, 6))
+sns.barplot(x='lift', y='antecedent_str', data=top_rules, palette='viridis')
+
+plt.title(f'Top {top_n} Association Rules by Lift')
+plt.xlabel('Lift')
+plt.ylabel('Antecedents')
+plt.tight_layout()
+plt.show()
